@@ -4,15 +4,6 @@ properties:
 - name: IBM_CLOUD_API_KEY
   value: ${API_KEY}
   type: secure
-- name: VAULT_REGION
-  value: ${VAULT_REGION}
-  type: text
-- name: VAULT_RESOURCE_GROUP
-  value: ${VAULT_RESOURCE_GROUP}
-  type: text
-- name: VAULT_INSTANCE
-  value: ${VAULT_INSTANCE}
-  type: text
 stages:
 - name: BUILD
   inputs:
@@ -110,9 +101,6 @@ stages:
   - name: REGISTRY_NAMESPACE
     value: ${REGISTRY_NAMESPACE}
     type: text
-  - name: DEVOPS_SIGNER
-    value: ${BUILD_SIGNER}
-    type: text
   - name: IMAGE_NAME
     value: ${APP_NAME}
     type: text
@@ -166,7 +154,7 @@ stages:
 
       # This script checks presence of registry namespace.
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_registry.sh")
-  - name: Build Signed Docker image
+  - name: Build image DinD
     type: builder
     curatedDockerImage: default
     artifact_dir: ''
@@ -174,38 +162,25 @@ stages:
     docker_image: ibmcom/pipeline-base-image:latest
     script: |
       #!/bin/bash
-      if [ "$VAULT_REGION" ]; then
-        # if vault region is in the 'ibm:yp:<region>' just keep the region part
-        export VAULT_REGION=$(echo "$VAULT_REGION" | awk -F ':' '{print $NF;}')
-      fi
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/image_signing/add_docker.sh")
       source <(curl -s -S -L "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/setup_dind.sh")
+      
       # configure the container registry
       REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
       ibmcloud cr region-set $REGISTRY_REGION
+      
       # login docker to ibm container registry
       ibmcloud cr login
-      # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
+      
+      # Initialize the REGISTRY_URL
       export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
-      export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
 
-      echo "Vault instance $VAULT_INSTANCE used to retrieve signing keys"
-      source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/image_signing/signing_utils.sh")
-      # Restore repository pem key and signer pem key
-      VAULT_DATA=$(buildVaultAccessDetailsJSON "$VAULT_INSTANCE" "${VAULT_REGION:-$IBMCLOUD_TARGET_REGION}" "${VAULT_RESOURCE_GROUP:-$IBMCLOUD_TARGET_RESOURCE_GROUP}")
-      JSON_DATA="$(readData "$REGISTRY_NAMESPACE.keys" "$VAULT_DATA")"
-      signerkey=$(getJSONValue "$DEVOPS_SIGNER" "$JSON_DATA")
-      writeFile "$signerkey"
-      # Retrieve the signer passphrase
-      export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$(getJSONValue "passphrase" "$signerkey")
-
-      export DCT_DISABLED=false
       source <(curl -s -S -L "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/build_image_dind.sh")
 - name: VALIDATE
   inputs:
   - type: job
     stage: CONTAINERIZE
-    job: Build Signed Docker image
+    job: Build image DinD
   triggers:
   - type: stage
   properties:
@@ -224,9 +199,6 @@ stages:
   - name: BUILD_CLUSTER_NAMESPACE
     value: ${BUILD_CLUSTER_NAMESPACE}
     type: text
-  - name: DEVOPS_SIGNER
-    value: ${VALIDATION_SIGNER}
-    type: text
   jobs:
   - name: Check vulnerabilities
     type: tester
@@ -244,36 +216,11 @@ stages:
       # unset it in order to recompute using build.properties value
       unset PIPELINE_IMAGE_URL
       source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/check_vulnerabilities.sh")
-  - name: Sign Image for Validation
-    type: tester
-    test_type: customimage
-    docker_image: ibmcom/pipeline-base-image:latest
-    script: |-
-      #!/bin/bash
-      # uncomment to debug the script
-      # set -x
-      # Sign the built image as validated
-      if [ "$VAULT_REGION" ]; then
-        # if vault region is in the 'ibm:yp:<region>' just keep the region part
-        export VAULT_REGION=$(echo "$VAULT_REGION" | awk -F ':' '{print $NF;}')
-      fi
-      source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/image_signing/add_docker.sh")
-      source <(curl -s -S -L "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/setup_dind.sh")
-      # configure the container registry
-      REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
-      ibmcloud cr region-set $REGISTRY_REGION
-      # login docker to ibm container registry
-      ibmcloud cr login
-      # Initialize the REGISTRY_URL and DOCKER_CONTENT_TRUST_SERVER
-      export REGISTRY_URL=$(ibmcloud cr info | grep -m1 -i '^Container Registry' | awk '{print $3;}')
-      export DOCKER_CONTENT_TRUST_SERVER="https://$REGISTRY_URL:4443"
-      
-      source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/image_signing/sign_image_with_vault_keys.sh")
 - name: DEPLOY
   inputs:
   - type: job
     stage: CONTAINERIZE
-    job: Build Signed Docker image
+    job: Build image DinD
   triggers:
   - type: stage
   properties:
@@ -298,51 +245,10 @@ stages:
   - name: DEPLOYMENT_FILE
     value: deployment.yml
     type: text
-  - name: BUILD_SIGNER
-    value: ${BUILD_SIGNER}
-    type: text
-  - name: VALIDATION_SIGNER
-    value: ${VALIDATION_SIGNER}
-    type: text
   - name: APP_URL
     value: undefined
     type: text
   jobs:
-  - name: Signatures Pre-Check
-    type: tester
-    test_type: customimage
-    docker_image: ibmcom/pipeline-base-image:latest
-    script: |-
-      #!/bin/bash
-      # uncomment to debug the script
-      # set -x
-      # This script inspect the docker image signatures to ensure compliance
-      source <(curl -sSL "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/image_signing/add_docker.sh")
-      source <(curl -s -S -L "https://raw.githubusercontent.com/open-toolchain/commons/master/scripts/setup_dind.sh")
-      # configure the container registry
-      REGISTRY_REGION=$(echo "$REGISTRY_REGION" | awk -F ':' '{print $NF;}')
-      ibmcloud cr region-set $REGISTRY_REGION
-      # login docker to ibm container registry
-      ibmcloud cr login
-      # configure DCT and inspect the image
-      export DOCKER_CONTENT_TRUST_SERVER=https://${REGISTRY_URL}:4443
-      docker trust inspect ${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} | tee _image_inspect.json
-
-      # Check if the Builder signature is present
-      if jq -e ".[] | select(.Name=\"$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG\") | .SignedTags[] | select(.SignedTag=\"$IMAGE_TAG\") | select (.Signers[] | contains(\"$BUILD_SIGNER\"))" _image_inspect.json; then
-        echo "Signature $BUILD_SIGNER found"
-      else
-        echo "Signature $BUILD_SIGNER not found"
-        exit 1
-      fi
-
-      # Check if the Validation signature is present
-      if jq -e ".[] | select(.Name=\"$REGISTRY_URL/$REGISTRY_NAMESPACE/$IMAGE_NAME:$IMAGE_TAG\") | .SignedTags[] | select(.SignedTag=\"$IMAGE_TAG\") | select (.Signers[] | contains(\"$VALIDATION_SIGNER\"))" _image_inspect.json; then
-        echo "Signature $VALIDATION_SIGNER found"
-      else
-        echo "Signature $VALIDATION_SIGNER not found"
-        exit 1
-      fi
   - name: Deploy to Kubernetes
     type: deployer
     target:

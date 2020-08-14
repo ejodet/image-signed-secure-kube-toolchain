@@ -20,7 +20,7 @@ template:
         "(" + $env.repository +
           "/tree/" + $env.branch + ")"
 toolchain:
-  name: 'image-signed-kube-toolchain-{{timestamp}}'
+  name: 'docker-in-docker-kube-toolchain-{{timestamp}}'
   template:
     getting_started:
       $ref: "#/messages/template.gettingStarted"
@@ -63,38 +63,7 @@ services:
           BUILD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
           BUILD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
           BUILD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.build-cluster-namespace}}'
-          VAULT_REGION: '{{form.pipeline.parameters.vault-region}}'
-          VAULT_RESOURCE_GROUP: '{{form.pipeline.parameters.vault-resource-group}}'
-          VAULT_INSTANCE: '{{form.pipeline.parameters.vault_name}}'
-          BUILD_SIGNER: '{{form.pipeline.parameters.build_signer}}'
-          VALIDATION_SIGNER: '{{form.pipeline.parameters.validation_signer}}'
-        execute: false
-  init_dct:
-    service_id: pipeline
-    parameters:
-      name: 'dct init {{form.pipeline.parameters.registry-namespace}} {{form.pipeline.parameters.app-name}}'
-      configuration:
-        content:
-          $text: init_dct_pipeline.yml
-        env:
-          APP_NAME: '{{form.pipeline.parameters.app-name}}'
-          REGISTRY_REGION_ID: '{{form.pipeline.parameters.registry-region}}'
-          REGISTRY_NAMESPACE: '{{form.pipeline.parameters.registry-namespace}}'
-          API_KEY: '{{form.pipeline.parameters.api-key}}'
-          BUILD_REGION_ID: '{{form.pipeline.parameters.prod-region}}'
-          BUILD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
-          BUILD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
-          BUILD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.build-cluster-namespace}}'
-          VAULT_REGION: '{{form.pipeline.parameters.vault-region}}'
-          VAULT_RESOURCE_GROUP: '{{form.pipeline.parameters.vault-resource-group}}'
-          VAULT_INSTANCE: '{{form.pipeline.parameters.vault_name}}'
-          BUILD_SIGNER: '{{form.pipeline.parameters.build_signer}}'
-          VALIDATION_SIGNER: '{{form.pipeline.parameters.validation_signer}}'
-          PROD_REGION_ID: '{{form.pipeline.parameters.prod-region}}'
-          PROD_RESOURCE_GROUP: '{{form.pipeline.parameters.prod-resource-group}}'
-          PROD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
-          PROD_CLUSTER_NAMESPACE: '{{form.pipeline.parameters.prod-cluster-namespace}}'
-        execute: false
+        execute: true
   webide:
     service_id: orion
 form:
