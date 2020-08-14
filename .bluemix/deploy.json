@@ -149,38 +149,6 @@
             },
             "type": "string",
             "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
-        },
-        "vault-region": {
-            "description": {
-                "$ref": "#/messages/vaultregion"
-            },
-            "type": "string",
-            "disabled": false,
-            "validator": {
-                "v-type": "k8s-region",
-                "params": [
-                    "api-key"
-                ]
-            }
-        },
-        "vault-resource-group": {
-            "description": {
-                "$ref": "#/messages/vaultrg"
-            },
-            "type": "string",
-            "validator": {
-                "v-type": "resource-group",
-                "params": [
-                    "api-key"
-                ]
-            }
-        },
-        "vault_name": {
-            "description": {
-                "$ref": "#/messages/deploy.keyDetails"
-            },
-            "type": "string",
-            "pattern": "\\S"
         }
     },
     "required": [
@@ -195,12 +163,7 @@
         "build-region",
         "build-resource-group",
         "build-cluster-name",
-        "build-cluster-namespace",
-        "vault-region",
-        "vault-resource-group",
-        "vault_name",
-        "build_signer",
-        "validation_signer"
+        "build-cluster-namespace"
     ],
     "form": [
         {
